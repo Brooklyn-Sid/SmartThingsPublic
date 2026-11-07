@@ -140,8 +140,7 @@ struct MedicationFormView: View {
                 }
             }
             .fullScreenCover(isPresented: $showingCamera) {
-                CameraPicker { image in draft.imageData = ImageUtil.downscaled(image) }
-                    .ignoresSafeArea()
+                MacroCameraView { image in draft.imageData = ImageUtil.downscaled(image) }
             }
             .onChange(of: photoItem) { _, item in
                 guard let item else { return }
@@ -215,7 +214,7 @@ struct MedicationFormView: View {
             }
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
                 Button { showingCamera = true } label: {
-                    Label("Take photo of pill or bottle", systemImage: "camera")
+                    Label("Take close-up photo of pill", systemImage: "camera")
                 }
             }
         }

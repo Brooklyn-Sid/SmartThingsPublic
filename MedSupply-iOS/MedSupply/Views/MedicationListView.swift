@@ -12,6 +12,7 @@ struct MedicationListView: View {
     @State private var showingSettings = false
     @State private var showingImport = false
     @State private var refillTarget: Medication?
+    @State private var cameraTarget: Medication?
     @State private var deleteTarget: Medication?
 
     private var active: [Medication] {
@@ -70,6 +71,12 @@ struct MedicationListView: View {
             .sheet(isPresented: $showingSettings, onDismiss: sync) { SettingsView() }
             .sheet(isPresented: $showingImport) { ImportView() }
             .sheet(item: $refillTarget) { RefillSheet(med: $0) }
+            .fullScreenCover(item: $cameraTarget) { med in
+                MacroCameraView { image in
+                    med.imageData = ImageUtil.downscaled(image)
+                    try? context.save()
+                }
+            }
             .confirmationDialog("Delete \(deleteTarget?.displayName ?? "")?",
                                 isPresented: Binding(get: { deleteTarget != nil },
                                                      set: { if !$0 { deleteTarget = nil } }),
@@ -100,7 +107,11 @@ struct MedicationListView: View {
     @ViewBuilder
     private func rows(_ meds: [Medication]) -> some View {
         ForEach(meds) { med in
-            NavigationLink(value: med) { MedicationRow(med: med, now: now) }
+            NavigationLink(value: med) {
+                // Tapping the placeholder pill icon opens the camera; a real photo just opens the row.
+                MedicationRow(med: med, now: now,
+                              onPhotoTap: med.imageData == nil ? { cameraTarget = med } : nil)
+            }
                 .swipeActions(edge: .leading) {
                     Button { refillTarget = med } label: { Label("Refill", systemImage: "plus.circle") }
                         .tint(.green)
@@ -135,11 +146,20 @@ struct MedicationListView: View {
 struct MedicationRow: View {
     let med: Medication
     var now: Date = .now
+    var onPhotoTap: (() -> Void)?
 
     var body: some View {
         let status = med.status(on: now)
         HStack(spacing: 12) {
-            MedicationThumbnail(data: med.imageData, size: 48)
+            if let onPhotoTap {
+                Button(action: onPhotoTap) {
+                    MedicationThumbnail(data: med.imageData, size: 48, showsCameraBadge: true)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Take photo of \(med.displayName)")
+            } else {
+                MedicationThumbnail(data: med.imageData, size: 48)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(med.displayName).font(.headline)
@@ -188,8 +208,23 @@ struct StatusBadge: View {
 struct MedicationThumbnail: View {
     let data: Data?
     var size: CGFloat
+    /// Small camera badge in the corner, used where tapping the thumbnail opens the camera.
+    var showsCameraBadge = false
 
     var body: some View {
+        thumbnail
+            .overlay(alignment: .bottomTrailing) {
+                if showsCameraBadge {
+                    Image(systemName: "camera.circle.fill")
+                        .font(.system(size: max(14, size * 0.3)))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, Color.accentColor)
+                        .offset(x: 4, y: 4)
+                }
+            }
+    }
+
+    private var thumbnail: some View {
         Group {
             if let data, let image = UIImage(data: data) {
                 Image(uiImage: image).resizable().scaledToFill()

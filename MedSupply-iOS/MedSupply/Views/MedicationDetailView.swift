@@ -8,12 +8,17 @@ struct MedicationDetailView: View {
     @State private var showingRefill = false
     @State private var showingRecount = false
     @State private var showingEdit = false
+    @State private var showingCamera = false
 
     var body: some View {
         List {
             Section {
                 HStack(spacing: 16) {
-                    MedicationThumbnail(data: med.imageData, size: 88)
+                    Button { showingCamera = true } label: {
+                        MedicationThumbnail(data: med.imageData, size: 88, showsCameraBadge: true)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(med.imageData == nil ? "Take photo" : "Retake photo")
                     VStack(alignment: .leading, spacing: 4) {
                         Text(med.displayName).font(.title2.bold())
                         if let generic = med.secondaryName {
@@ -141,6 +146,12 @@ struct MedicationDetailView: View {
         .sheet(isPresented: $showingRefill) { RefillSheet(med: med) }
         .sheet(isPresented: $showingRecount) { RecountSheet(med: med) }
         .sheet(isPresented: $showingEdit) { MedicationFormView(medication: med) }
+        .fullScreenCover(isPresented: $showingCamera) {
+            MacroCameraView { image in
+                med.imageData = ImageUtil.downscaled(image)
+                try? context.save()
+            }
+        }
     }
 
     private var frequencyText: String {
