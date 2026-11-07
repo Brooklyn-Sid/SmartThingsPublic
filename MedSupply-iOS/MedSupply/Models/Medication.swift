@@ -9,6 +9,8 @@ enum Frequency: String, CaseIterable, Identifiable, Codable {
     case fourTimesDaily
     case everyOtherDay
     case weekly
+    case timesPerWeek
+    case everyNDays
     case custom
     case asNeeded
 
@@ -22,6 +24,8 @@ enum Frequency: String, CaseIterable, Identifiable, Codable {
         case .fourTimesDaily: return "4 times a day"
         case .everyOtherDay: return "Every other day"
         case .weekly: return "Once a week"
+        case .timesPerWeek: return "Times per week"
+        case .everyNDays: return "Every few days"
         case .custom: return "Custom (doses per day)"
         case .asNeeded: return "As needed (estimate)"
         }
@@ -36,9 +40,60 @@ enum Frequency: String, CaseIterable, Identifiable, Codable {
         case .fourTimesDaily: return 4
         case .everyOtherDay: return 0.5
         case .weekly: return 1.0 / 7.0
-        case .custom, .asNeeded: return nil
+        case .timesPerWeek, .everyNDays, .custom, .asNeeded: return nil
         }
     }
+
+    /// Schedules that take a whole number: "N times per week" or "every N days".
+    var usesScheduleNumber: Bool { self == .timesPerWeek || self == .everyNDays }
+
+    /// Schedules described by a (possibly fractional) number of doses per day.
+    var usesDosesPerDay: Bool { self == .custom || self == .asNeeded }
+
+    /// Converts any schedule to doses per day. Used only for the supply math, not for display.
+    func dosesPerDay(custom: Double, number: Double) -> Double {
+        switch self {
+        case .timesPerWeek: return max(0, number) / 7
+        case .everyNDays: return number > 0 ? 1 / number : 0
+        case .custom, .asNeeded: return custom
+        default: return fixedDosesPerDay ?? 0
+        }
+    }
+
+    /// How the schedule is written on a prescription: "twice a week", "every 28 days".
+    func describe(custom: Double, number: Double) -> String {
+        switch self {
+        case .onceDaily: return "once a day"
+        case .twiceDaily: return "twice a day"
+        case .threeTimesDaily: return "3 times a day"
+        case .fourTimesDaily: return "4 times a day"
+        case .everyOtherDay: return "every other day"
+        case .weekly: return "once a week"
+        case .timesPerWeek:
+            switch number {
+            case 1: return "once a week"
+            case 2: return "twice a week"
+            default: return "\(Fmt.count(number)) times a week"
+            }
+        case .everyNDays:
+            switch number {
+            case 1: return "every day"
+            case 2: return "every other day"
+            case 7: return "once a week"
+            default: return "every \(Fmt.count(number)) days"
+            }
+        case .custom:
+            return custom == 1 ? "once a day" : "\(Fmt.count(custom)) times a day"
+        case .asNeeded:
+            return custom > 0 ? "as needed (about \(Fmt.count(custom)) a day)" : "as needed"
+        }
+    }
+}
+
+/// Dose forms offered in the editor. Any other text is allowed too (e.g. from an import).
+enum DoseUnit {
+    static let common = ["tablet", "capsule", "patch", "injection", "pen", "vial", "spray",
+                         "drop", "puff", "dose", "ml"]
 }
 
 enum HistoryKind: String, Codable {
@@ -95,8 +150,12 @@ final class Medication {
     var frequencyRaw: String = Frequency.onceDaily.rawValue
     /// Used when frequency is .custom or .asNeeded.
     var customDosesPerDay: Double = 1
-    /// Pills (or units) taken per dose, e.g. 2 tablets, or 0.5 for a half tablet.
+    /// Units taken per dose, e.g. 2 tablets, or 0.25 for a quarter tablet.
     var unitsPerDose: Double = 1
+    /// Dose form, singular: "tablet", "patch", "injection"…
+    var unitName: String = "tablet"
+    /// N for "N times per week" or "every N days".
+    var scheduleNumber: Double = 1
 
     // Supply
     /// Count on hand as of `lastRefreshedDate`. The current count is projected from this.
@@ -131,10 +190,21 @@ final class Medication {
         set { frequencyRaw = newValue.rawValue }
     }
 
-    var dosesPerDay: Double { frequency.fixedDosesPerDay ?? customDosesPerDay }
+    var dosesPerDay: Double { frequency.dosesPerDay(custom: customDosesPerDay, number: scheduleNumber) }
 
     /// Units consumed per day.
     var dailyUsage: Double { dosesPerDay * unitsPerDose }
+
+    /// "1 patch twice a week", "¼ tablet once a day".
+    var scheduleText: String {
+        "\(Fmt.amount(unitsPerDose)) \(Fmt.unit(unitName, count: unitsPerDose)) "
+            + frequency.describe(custom: customDosesPerDay, number: scheduleNumber)
+    }
+
+    /// "8 patches", "20.25 tablets".
+    func countText(_ count: Double) -> String {
+        "\(Fmt.count(count)) \(Fmt.unit(unitName, count: count))"
+    }
 
     var displayName: String {
         let brand = brandName.trimmingCharacters(in: .whitespaces)
@@ -287,5 +357,30 @@ enum SupplyMath {
         guard dailyUsage > 0 else { return nil }
         let daysOfSupply = Int((start / dailyUsage + 1e-9).rounded(.down))
         return calendar.date(byAdding: .day, value: daysOfSupply, to: calendar.startOfDay(for: refreshed))
+    }
+}
+
+/// One-time fixes to data saved by earlier versions of the app.
+enum DataMigrations {
+    /// Earlier imports stored "Twice weekly" / "Every 28 days" as fractional doses per day.
+    /// Converts those to the times-per-week / every-N-days schedules. Safe to run on every launch.
+    static func run(context: ModelContext) {
+        let meds = (try? context.fetch(FetchDescriptor<Medication>())) ?? []
+        var changed = false
+        for med in meds where med.frequency == .custom && med.customDosesPerDay > 0 && med.customDosesPerDay < 1 {
+            let perDay = med.customDosesPerDay
+            let perWeek = perDay * 7
+            let everyDays = 1 / perDay
+            if perWeek >= 1, abs(perWeek - perWeek.rounded()) < 0.01 {
+                med.frequency = .timesPerWeek
+                med.scheduleNumber = perWeek.rounded()
+                changed = true
+            } else if abs(everyDays - everyDays.rounded()) < 0.01 {
+                med.frequency = .everyNDays
+                med.scheduleNumber = everyDays.rounded()
+                changed = true
+            }
+        }
+        if changed { try? context.save() }
     }
 }

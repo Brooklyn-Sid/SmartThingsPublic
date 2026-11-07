@@ -10,7 +10,9 @@ struct MedicationDraft {
     var dose = ""
     var frequency: Frequency = .onceDaily
     var customDosesPerDay: Double? = 1
+    var scheduleNumber: Double? = 1
     var unitsPerDose: Double? = 1
+    var unitName = "tablet"
     var count: Double?
     var countDate = Date()
     var pharmacyName = ""
@@ -34,7 +36,9 @@ struct MedicationDraft {
         dose = m.dose
         frequency = m.frequency
         customDosesPerDay = m.customDosesPerDay
+        scheduleNumber = m.scheduleNumber
         unitsPerDose = m.unitsPerDose
+        unitName = m.unitName
         pharmacyName = m.pharmacyName
         pharmacyPhone = m.pharmacyPhone
         rxNumber = m.rxNumber
@@ -53,9 +57,20 @@ struct MedicationDraft {
             || !genericName.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    /// Doses per day for the supply math.
+    var dailyUsage: Double {
+        frequency.dosesPerDay(custom: customDosesPerDay ?? 0, number: scheduleNumber ?? 0) * (unitsPerDose ?? 1)
+    }
+
+    var scheduleText: String {
+        "\(Fmt.amount(unitsPerDose ?? 1)) \(Fmt.unit(unitName, count: unitsPerDose ?? 1)) "
+            + frequency.describe(custom: customDosesPerDay ?? 0, number: scheduleNumber ?? 1)
+    }
+
     func isValid(isNew: Bool) -> Bool {
         guard hasName, (unitsPerDose ?? 0) > 0 else { return false }
-        if frequency.fixedDosesPerDay == nil, (customDosesPerDay ?? -1) < 0 { return false }
+        if frequency.usesDosesPerDay, (customDosesPerDay ?? -1) < 0 { return false }
+        if frequency.usesScheduleNumber, (scheduleNumber ?? 0) <= 0 { return false }
         return !isNew || (count ?? -1) >= 0
     }
 
@@ -67,7 +82,10 @@ struct MedicationDraft {
         m.dose = trim(dose)
         m.frequency = frequency
         m.customDosesPerDay = customDosesPerDay ?? 0
+        m.scheduleNumber = scheduleNumber ?? 1
         m.unitsPerDose = unitsPerDose ?? 1
+        let unit = trim(unitName)
+        m.unitName = unit.isEmpty ? "tablet" : unit
         m.pharmacyName = trim(pharmacyName)
         m.pharmacyPhone = trim(pharmacyPhone)
         m.rxNumber = trim(rxNumber)
@@ -226,24 +244,52 @@ struct MedicationFormView: View {
             Picker("How often", selection: $draft.frequency) {
                 ForEach(Frequency.allCases) { Text($0.label).tag($0) }
             }
-            if draft.frequency.fixedDosesPerDay == nil {
+            switch draft.frequency {
+            case .timesPerWeek:
+                LabeledContent("Times per week") {
+                    TextField("2", value: $draft.scheduleNumber, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                }
+            case .everyNDays:
+                LabeledContent("Every how many days") {
+                    TextField("28", value: $draft.scheduleNumber, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                }
+            case .custom, .asNeeded:
                 LabeledContent(draft.frequency == .asNeeded ? "Average doses per day" : "Doses per day") {
                     TextField("1", value: $draft.customDosesPerDay, format: .number)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                 }
+            default:
+                EmptyView()
             }
-            LabeledContent("Pills per dose") {
+            LabeledContent("Amount per dose") {
                 TextField("1", value: $draft.unitsPerDose, format: .number)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
             }
+            Picker("Form", selection: $draft.unitName) {
+                ForEach(unitOptions, id: \.self) { Text($0.capitalized).tag($0) }
+            }
+            if (draft.unitsPerDose ?? 0) > 0 {
+                Text("Takes \(draft.scheduleText)")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
         }
+    }
+
+    /// Common forms, plus the current value if it came from an import and isn't in the list.
+    private var unitOptions: [String] {
+        let current = draft.unitName.trimmingCharacters(in: .whitespaces)
+        return DoseUnit.common.contains(current) || current.isEmpty ? DoseUnit.common : DoseUnit.common + [current]
     }
 
     private var countSection: some View {
         Section {
-            LabeledContent("Current count") {
+            LabeledContent("Current count (\(Fmt.unit(draft.unitName, count: 2)))") {
                 TextField("Required", value: $draft.count, format: .number)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
@@ -353,8 +399,7 @@ struct MedicationFormView: View {
     }
 
     private func projectedRunOut(_ count: Double) -> Date? {
-        let perDay = (draft.frequency.fixedDosesPerDay ?? draft.customDosesPerDay ?? 0) * (draft.unitsPerDose ?? 1)
-        return SupplyMath.runOutDate(start: count, refreshed: draft.countDate, dailyUsage: perDay)
+        SupplyMath.runOutDate(start: count, refreshed: draft.countDate, dailyUsage: draft.dailyUsage)
     }
 
     private func lookup(from field: NameField) {

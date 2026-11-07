@@ -15,7 +15,7 @@ struct RefillSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Count added", value: $quantity, format: .number)
+                    TextField("Number of \(Fmt.unit(med.unitName, count: 2)) added", value: $quantity, format: .number)
                         .keyboardType(.decimalPad)
                         .focused($focused)
                         .font(.title2)
@@ -26,14 +26,14 @@ struct RefillSheet: View {
                     Text("How many are being added?")
                 } footer: {
                     if let qty = med.lastRefillQuantity {
-                        Text("Last refill was \(Fmt.count(qty)).")
+                        Text("Last refill was \(med.countText(qty)).")
                     }
                 }
 
                 Section("Result") {
-                    LabeledContent("On hand now (estimated)", value: Fmt.count(onHand))
+                    LabeledContent("On hand now (estimated)", value: med.countText(onHand))
                     if let qty = quantity, qty > 0 {
-                        LabeledContent("New count", value: Fmt.count(onHand + qty))
+                        LabeledContent("New count", value: med.countText(onHand + qty))
                         if let runOut = SupplyMath.runOutDate(start: onHand + qty, refreshed: date,
                                                               dailyUsage: med.dailyUsage) {
                             LabeledContent("New run-out date", value: Fmt.date(runOut))
@@ -80,14 +80,14 @@ struct RecountSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Actual count", value: $count, format: .number)
+                    TextField("Number of \(Fmt.unit(med.unitName, count: 2))", value: $count, format: .number)
                         .keyboardType(.decimalPad)
                         .focused($focused)
                         .font(.title2)
                 } header: {
                     Text("How many are actually on hand?")
                 } footer: {
-                    Text("The app estimates \(Fmt.count(med.estimatedCount())). Recounting fixes drift from missed or extra doses.")
+                    Text("The app estimates \(med.countText(med.estimatedCount())). Recounting fixes drift from missed or extra doses.")
                 }
             }
             .navigationTitle("Recount")

@@ -40,8 +40,8 @@ struct MedicationDetailView: View {
                     Spacer()
                     StatusBadge(status: med.status())
                 }
-                LabeledContent("On hand (estimated)", value: Fmt.count(med.estimatedCount()))
-                LabeledContent("Uses per day", value: Fmt.count(med.dailyUsage))
+                LabeledContent("On hand (estimated)", value: med.countText(med.estimatedCount()))
+                LabeledContent("Schedule", value: med.scheduleText.capitalizedFirst)
                 if let runOut = med.runOutDate {
                     LabeledContent("Runs out", value: Fmt.date(runOut))
                 }
@@ -83,7 +83,6 @@ struct MedicationDetailView: View {
             }
 
             Section("Prescription") {
-                LabeledContent("Frequency", value: frequencyText)
                 if !med.rxNumber.isEmpty {
                     LabeledContent("Rx number") { Text(med.rxNumber).textSelection(.enabled) }
                 }
@@ -152,16 +151,6 @@ struct MedicationDetailView: View {
                 try? context.save()
             }
         }
-    }
-
-    private var frequencyText: String {
-        var text = med.frequency.label
-        if med.frequency.fixedDosesPerDay == nil {
-            text = "\(Fmt.count(med.customDosesPerDay)) doses/day"
-            if med.frequency == .asNeeded { text += " (as needed)" }
-        }
-        if med.unitsPerDose != 1 { text += ", \(Fmt.count(med.unitsPerDose)) per dose" }
-        return text
     }
 
     @ViewBuilder

@@ -83,6 +83,7 @@ enum MedicationImporter {
             draft.isControlled = parseBool(value(.controlled))
 
             let amountText = value(.unitsPerDose)
+            if let unit = parseUnit(amountText) { draft.unitName = unit }
             if amountText.isEmpty {
                 draft.unitsPerDose = 1
             } else if let amount = parseAmount(amountText), amount > 0 {
@@ -95,7 +96,11 @@ enum MedicationImporter {
             let scheduleText = value(.schedule)
             if let parsed = parseSchedule(scheduleText) {
                 draft.frequency = parsed.0
-                draft.customDosesPerDay = parsed.1
+                if parsed.0.usesScheduleNumber {
+                    draft.scheduleNumber = parsed.1
+                } else {
+                    draft.customDosesPerDay = parsed.1
+                }
             } else {
                 draft.frequency = .onceDaily
                 warnings.append(scheduleText.isEmpty ? "No schedule; using once a day."
@@ -150,7 +155,24 @@ enum MedicationImporter {
         return found ? total : nil
     }
 
-    /// Returns the frequency and doses per day (the latter used for custom / as-needed schedules).
+    /// The dose form from text like "1 patch", "¼ tablet", "2 capsules" → "patch", "tablet", "capsule".
+    static func parseUnit(_ text: String) -> String? {
+        let words = text.lowercased()
+            .split(whereSeparator: { $0 == " " || $0 == "\u{00A0}" })
+            .map(String.init)
+            .filter { word in !word.contains(where: { $0.isNumber || "¼½¾⅓⅔⅛/.".contains($0) }) }
+        guard let word = words.first else { return nil }
+        let candidates = [word, word.hasSuffix("es") ? String(word.dropLast(2)) : word,
+                          word.hasSuffix("s") ? String(word.dropLast()) : word]
+        if let known = candidates.first(where: { DoseUnit.common.contains($0) }) { return known }
+        if ["pill", "pills", "tab", "tabs"].contains(word) { return "tablet" }
+        if ["cap", "caps"].contains(word) { return "capsule" }
+        if ["shot", "shots"].contains(word) { return "injection" }
+        return candidates[2]
+    }
+
+    /// Returns the frequency and a number whose meaning depends on it: N for times-per-week and
+    /// every-N-days schedules, doses per day for custom / as-needed ones.
     static func parseSchedule(_ text: String) -> (Frequency, Double)? {
         let s = text.lowercased()
             .replacingOccurrences(of: "-", with: " ")
@@ -183,15 +205,20 @@ enum MedicationImporter {
             return nil
         }
 
-        // "every 28 days", "every 2 weeks", "every other week"
-        if words.first == "every", words.count == 3, let n = number(words[1]), n > 0, let days = unitDays(words[2]) {
-            return (.custom, 1 / (n * days))
+        // "every 28 days", "every 2 weeks", "every other week", "every month"
+        if words.first == "every", (2...3).contains(words.count) {
+            let n = words.count == 3 ? number(words[1]) : 1
+            if let n, n > 0, let days = unitDays(words[words.count - 1]) {
+                return (.everyNDays, n * days)
+            }
         }
         // "twice weekly", "3 times a week", "2x per week", "once monthly"
         if let n = number(words[0]), n > 0, let last = words.last {
             let unit: Double? = last == "weekly" ? 7 : last == "monthly" ? 30 : last == "daily" ? 1 : unitDays(last)
             let middleOK = words.dropFirst().dropLast().allSatisfy { ["times", "time", "a", "per", "x"].contains($0) }
             if let unit, middleOK {
+                if unit == 7 { return (.timesPerWeek, n) }
+                if n == 1 && unit > 1 { return (.everyNDays, unit) }
                 return (.custom, n / unit)
             }
         }

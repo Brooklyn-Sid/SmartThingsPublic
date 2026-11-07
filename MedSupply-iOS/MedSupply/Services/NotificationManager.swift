@@ -60,7 +60,7 @@ enum NotificationManager {
 
     private static func body(for med: Medication, at date: Date, runOut: Date) -> String {
         var parts: [String] = []
-        let left = Fmt.count(med.estimatedCount(on: date))
+        let left = med.countText(med.estimatedCount(on: date))
         parts.append("About \(left) left; runs out \(runOut.formatted(date: .abbreviated, time: .omitted)).")
         if !med.pharmacyName.isEmpty {
             parts.append(med.rxNumber.isEmpty ? "Pharmacy: \(med.pharmacyName)."

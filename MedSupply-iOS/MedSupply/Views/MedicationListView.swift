@@ -93,6 +93,7 @@ struct MedicationListView: View {
             }
         }
         .task {
+            DataMigrations.run(context: context)
             await NotificationManager.requestAuthorization()
             sync()
         }
@@ -186,7 +187,7 @@ struct MedicationRow: View {
     }
 
     private var detailLine: String {
-        var parts = ["\(Fmt.count(med.estimatedCount(on: now))) left"]
+        var parts = ["\(med.countText(med.estimatedCount(on: now))) left"]
         if let runOut = med.runOutDate { parts.append("out \(Fmt.date(runOut))") }
         return parts.joined(separator: " · ")
     }

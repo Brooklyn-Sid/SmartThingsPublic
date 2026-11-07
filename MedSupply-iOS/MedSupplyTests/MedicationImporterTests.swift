@@ -14,7 +14,7 @@ final class MedicationImporterTests: XCTestCase {
     func testScheduleParsing() {
         func perDay(_ s: String) -> Double? {
             guard let parsed = MedicationImporter.parseSchedule(s) else { return nil }
-            return parsed.0.fixedDosesPerDay ?? parsed.1
+            return parsed.0.dosesPerDay(custom: parsed.1, number: parsed.1)
         }
         XCTAssertEqual(MedicationImporter.parseSchedule("Daily")?.0, .onceDaily)
         XCTAssertEqual(MedicationImporter.parseSchedule("BID")?.0, .twiceDaily)
@@ -23,6 +23,11 @@ final class MedicationImporterTests: XCTestCase {
         XCTAssertEqual(perDay("Every 28 days")!, 1.0 / 28.0, accuracy: 1e-9)
         XCTAssertEqual(perDay("every 2 weeks")!, 1.0 / 14.0, accuracy: 1e-9)
         XCTAssertEqual(MedicationImporter.parseSchedule("As needed")?.0, .asNeeded)
+        XCTAssertEqual(MedicationImporter.parseSchedule("Twice weekly")?.0, .timesPerWeek)
+        XCTAssertEqual(MedicationImporter.parseSchedule("Twice weekly")?.1, 2)
+        XCTAssertEqual(MedicationImporter.parseSchedule("Every 28 days")?.0, .everyNDays)
+        XCTAssertEqual(MedicationImporter.parseSchedule("Every 28 days")?.1, 28)
+        XCTAssertEqual(MedicationImporter.parseSchedule("once monthly")?.0, .everyNDays)
         XCTAssertNil(MedicationImporter.parseSchedule("with meals sometimes"))
     }
 
@@ -62,8 +67,30 @@ final class MedicationImporterTests: XCTestCase {
         XCTAssertEqual(rows[1].draft.genericName, "thyroid, porcine (desiccated)")
         XCTAssertNil(rows[1].draft.refillsRemaining)
 
+        XCTAssertEqual(rows[1].draft.unitName, "patch")
+        XCTAssertEqual(rows[1].draft.scheduleText, "1 patch twice a week")
+
         XCTAssertTrue(rows[2].draft.isControlled)
-        XCTAssertEqual(rows[2].draft.frequency, .custom)
+        XCTAssertEqual(rows[2].draft.frequency, .everyNDays)
+        XCTAssertEqual(rows[2].draft.scheduleText, "1 injection every 28 days")
+    }
+
+    func testUnitParsing() {
+        XCTAssertEqual(MedicationImporter.parseUnit("1 patch"), "patch")
+        XCTAssertEqual(MedicationImporter.parseUnit("¼ tablet"), "tablet")
+        XCTAssertEqual(MedicationImporter.parseUnit("2 capsules"), "capsule")
+        XCTAssertEqual(MedicationImporter.parseUnit("1 injection"), "injection")
+        XCTAssertEqual(MedicationImporter.parseUnit("1 pill"), "tablet")
+        XCTAssertNil(MedicationImporter.parseUnit("2"))
+    }
+
+    func testFormatting() {
+        XCTAssertEqual(Fmt.unit("patch", count: 8), "patches")
+        XCTAssertEqual(Fmt.unit("tablet", count: 1), "tablet")
+        XCTAssertEqual(Fmt.unit("tablet", count: 20.25), "tablets")
+        XCTAssertEqual(Fmt.amount(0.25), "¼")
+        XCTAssertEqual(Fmt.amount(1.5), "1½")
+        XCTAssertEqual(Fmt.amount(2), "2")
     }
 
     func testMissingNameColumnThrows() {

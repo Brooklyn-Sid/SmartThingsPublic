@@ -80,16 +80,9 @@ struct ImportView: View {
     }
 
     private func summary(_ d: MedicationDraft) -> String {
-        var schedule = d.frequency.label
-        if d.frequency.fixedDosesPerDay == nil, let perDay = d.customDosesPerDay, perDay > 0 {
-            schedule = "every \(Fmt.count(1 / perDay)) days"
-            if perDay >= 1 { schedule = "\(Fmt.count(perDay))/day" }
-        }
-        var parts = ["\(Fmt.count(d.count ?? 0)) on hand", schedule]
-        if let units = d.unitsPerDose, units != 1 { parts.append("\(Fmt.count(units)) per dose") }
-        if let runOut = SupplyMath.runOutDate(
-            start: d.count ?? 0, refreshed: d.countDate,
-            dailyUsage: (d.frequency.fixedDosesPerDay ?? d.customDosesPerDay ?? 0) * (d.unitsPerDose ?? 1)) {
+        let count = d.count ?? 0
+        var parts = ["\(Fmt.count(count)) \(Fmt.unit(d.unitName, count: count)) on hand", d.scheduleText]
+        if let runOut = SupplyMath.runOutDate(start: count, refreshed: d.countDate, dailyUsage: d.dailyUsage) {
             parts.append("out \(Fmt.date(runOut))")
         }
         return parts.joined(separator: " · ")

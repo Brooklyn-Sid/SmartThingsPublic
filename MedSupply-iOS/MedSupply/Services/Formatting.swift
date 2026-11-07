@@ -2,9 +2,32 @@ import SwiftUI
 import UIKit
 
 enum Fmt {
-    /// "30", "29.5" — counts can be fractional when half tablets are used.
+    /// "30", "20.25": up to two decimals, since counts can be fractional with partial tablets.
     static func count(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0...1)))
+        value.formatted(.number.precision(.fractionLength(0...2)))
+    }
+
+    /// Dose amounts with common fractions: 0.25 → "¼", 1.5 → "1½".
+    static func amount(_ value: Double) -> String {
+        let whole = value.rounded(.down)
+        let glyphs: [(Double, String)] = [(0.25, "¼"), (0.5, "½"), (0.75, "¾"), (1.0 / 3, "⅓"), (2.0 / 3, "⅔")]
+        if let match = glyphs.first(where: { abs((value - whole) - $0.0) < 0.01 }) {
+            return whole == 0 ? match.1 : "\(Int(whole))\(match.1)"
+        }
+        return count(value)
+    }
+
+    /// Pluralizes a dose form for a count: 1 patch, 8 patches, 0.25 tablet, 30 tablets.
+    static func unit(_ name: String, count: Double) -> String {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty, count > 1 || count == 0 else { return n }
+        let lower = n.lowercased()
+        if ["ml", "mg", "g", "mcg"].contains(lower) || lower.hasSuffix("s") && !lower.hasSuffix("ss") { return n }
+        if ["ch", "sh", "x", "z", "ss"].contains(where: { lower.hasSuffix($0) }) { return n + "es" }
+        if lower.hasSuffix("y"), let before = lower.dropLast().last, !"aeiou".contains(before) {
+            return String(n.dropLast()) + "ies"
+        }
+        return n + "s"
     }
 
     static func date(_ date: Date) -> String {
@@ -27,6 +50,11 @@ extension SupplyStatus {
         case .out: return .red
         }
     }
+}
+
+extension String {
+    /// "twice a week" → "Twice a week".
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
 
 enum ImageUtil {
