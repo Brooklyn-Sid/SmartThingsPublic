@@ -145,7 +145,8 @@ final class Medication {
     var secondaryName: String? {
         let brand = brandName.trimmingCharacters(in: .whitespaces)
         let generic = genericName.trimmingCharacters(in: .whitespaces)
-        guard !brand.isEmpty, !generic.isEmpty else { return nil }
+        guard !brand.isEmpty, !generic.isEmpty,
+              brand.caseInsensitiveCompare(generic) != .orderedSame else { return nil }
         return generic
     }
 

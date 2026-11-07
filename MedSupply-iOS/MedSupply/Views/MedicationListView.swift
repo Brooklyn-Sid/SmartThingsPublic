@@ -10,6 +10,7 @@ struct MedicationListView: View {
     @State private var now = Date()
     @State private var showingAdd = false
     @State private var showingSettings = false
+    @State private var showingImport = false
     @State private var refillTarget: Medication?
     @State private var deleteTarget: Medication?
 
@@ -44,6 +45,7 @@ struct MedicationListView: View {
                     } actions: {
                         Button("Add medication") { showingAdd = true }
                             .buttonStyle(.borderedProminent)
+                        Button("Import from spreadsheet") { showingImport = true }
                     }
                 }
             }
@@ -53,6 +55,9 @@ struct MedicationListView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
                         Toggle("Show archived", isOn: $showArchived)
+                        Button { showingImport = true } label: {
+                            Label("Import from spreadsheet…", systemImage: "square.and.arrow.down")
+                        }
                         Button { showingSettings = true } label: { Label("Settings", systemImage: "gear") }
                     } label: { Image(systemName: "ellipsis.circle") }
                 }
@@ -63,6 +68,7 @@ struct MedicationListView: View {
             }
             .sheet(isPresented: $showingAdd) { MedicationFormView(medication: nil) }
             .sheet(isPresented: $showingSettings, onDismiss: sync) { SettingsView() }
+            .sheet(isPresented: $showingImport) { ImportView() }
             .sheet(item: $refillTarget) { RefillSheet(med: $0) }
             .confirmationDialog("Delete \(deleteTarget?.displayName ?? "")?",
                                 isPresented: Binding(get: { deleteTarget != nil },
@@ -142,8 +148,8 @@ struct MedicationRow: View {
                             .accessibilityLabel("Controlled substance")
                     }
                 }
-                if let generic = med.secondaryName {
-                    Text(generic).font(.subheadline).foregroundStyle(.secondary)
+                if let subtitle = subtitle {
+                    Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
                 }
                 Text(detailLine).font(.caption).foregroundStyle(.secondary)
             }
@@ -151,6 +157,12 @@ struct MedicationRow: View {
             StatusBadge(status: status)
         }
         .padding(.vertical, 2)
+    }
+
+    /// Generic name and strength, so two strengths of the same drug are distinguishable.
+    private var subtitle: String? {
+        let parts = [med.secondaryName ?? "", med.dose].filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var detailLine: String {

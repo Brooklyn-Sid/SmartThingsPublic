@@ -343,7 +343,7 @@ struct MedicationFormView: View {
     private func uniqueContacts(_ contacts: [Contact]) -> [Contact] {
         var seen = Set<String>()
         return contacts
-            .filter { !$0.name.isEmpty && seen.insert($0.name.lowercased()).inserted }
+            .filter { !$0.name.isEmpty && seen.insert($0.name.lowercased().filter { !$0.isWhitespace }).inserted }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 

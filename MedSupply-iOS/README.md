@@ -14,6 +14,14 @@ A small SwiftUI app that tracks medication **supply** and reminds you to **reord
 - **Image lookup** from NIH **DailyMed** (FDA label images). She can also pick from Photos or take a photo of her own bottle or pill.
 - Home screen sorted by run-out date, a "Reorder now" section, an app badge count, swipe-to-refill, archive for stopped meds, refill history, tap-to-call pharmacy or doctor, and "Share refill info" (text with Rx #, pharmacy, and doctor).
 
+## Importing from a spreadsheet
+
+Menu (•••) › **Import from spreadsheet…** reads a CSV file with column headers in the first row. In Google Sheets, use File › Download › Comma-separated values, AirDrop the file to the iPhone, and save it to Files. Columns are matched by header name, and unknown columns are ignored. Recognized headers include: Medication name / Brand name, Generic name, Strength / Dose, Amount per dose, Schedule / Frequency, Quantity on hand / Count, Count verified date, Pharmacy, Pharmacy phone, Prescription number / Rx number, Prescribing doctor, Doctor phone, Refills remaining, Controlled, and Notes.
+
+The importer understands schedules such as "Daily", "BID", "Twice weekly", "3 times a week", "Every 28 days" and "As needed", and amounts such as "1 tablet", "¼ tablet" and "1 1/2 tablets". The preview flags anything it couldn't read and leaves rows that are already in the app unchecked. Blank brand or generic names are filled from RxNorm after import.
+
+Medication data is never stored in this repository; it stays on the phone.
+
 ## Build & install (requires a Mac with Xcode 16 or later)
 
 1. `brew install xcodegen`
