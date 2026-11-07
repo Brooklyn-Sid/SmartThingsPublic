@@ -9,16 +9,25 @@ struct MedicationDetailView: View {
     @State private var showingRecount = false
     @State private var showingEdit = false
     @State private var showingCamera = false
+    @State private var showingPhotoOptions = false
+    @State private var showingPhoto = false
 
     var body: some View {
         List {
             Section {
                 HStack(spacing: 16) {
-                    Button { showingCamera = true } label: {
-                        MedicationThumbnail(data: med.imageData, size: 88, showsCameraBadge: true)
+                    Button {
+                        if med.imageData == nil { showingCamera = true } else { showingPhotoOptions = true }
+                    } label: {
+                        MedicationThumbnail(data: med.imageData, size: 88,
+                                            showsCameraBadge: med.imageData == nil)
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel(med.imageData == nil ? "Take photo" : "Retake photo")
+                    .accessibilityLabel(med.imageData == nil ? "Take photo" : "Photo options")
+                    .confirmationDialog("Photo", isPresented: $showingPhotoOptions) {
+                        Button("View Photo") { showingPhoto = true }
+                        Button("Take New Photo") { showingCamera = true }
+                    }
                     VStack(alignment: .leading, spacing: 4) {
                         Text(med.displayName).font(.title2.bold())
                         if let generic = med.secondaryName {
@@ -145,6 +154,9 @@ struct MedicationDetailView: View {
         .sheet(isPresented: $showingRefill) { RefillSheet(med: med) }
         .sheet(isPresented: $showingRecount) { RecountSheet(med: med) }
         .sheet(isPresented: $showingEdit) { MedicationFormView(medication: med) }
+        .fullScreenCover(isPresented: $showingPhoto) {
+            PhotoViewer(data: med.imageData, title: med.displayName)
+        }
         .fullScreenCover(isPresented: $showingCamera) {
             MacroCameraView { image in
                 med.imageData = ImageUtil.downscaled(image)

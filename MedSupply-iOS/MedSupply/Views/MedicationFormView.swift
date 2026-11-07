@@ -294,7 +294,8 @@ struct MedicationFormView: View {
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
             }
-            DatePicker("Counted on", selection: $draft.countDate, in: ...Date(), displayedComponents: .date)
+            CollapsingDatePicker(title: "Counted on", selection: $draft.countDate,
+                                 range: Date.distantPast...Date())
         } header: {
             Text("Supply")
         } footer: {
@@ -316,7 +317,7 @@ struct MedicationFormView: View {
             }
             Toggle("Track Rx expiration", isOn: $draft.hasExpiration)
             if draft.hasExpiration {
-                DatePicker("Expires", selection: $draft.rxExpirationDate, displayedComponents: .date)
+                CollapsingDatePicker(title: "Expires", selection: $draft.rxExpirationDate)
             }
         }
     }

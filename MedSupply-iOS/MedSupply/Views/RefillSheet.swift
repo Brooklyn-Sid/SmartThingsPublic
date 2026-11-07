@@ -7,7 +7,7 @@ struct RefillSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
-    @State private var quantity: Double?
+    @State private var quantityText = ""
     @State private var date = Date()
     @FocusState private var focused: Bool
 
@@ -15,13 +15,12 @@ struct RefillSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Number of \(Fmt.unit(med.unitName, count: 2)) added", value: $quantity, format: .number)
+                    TextField("Number of \(Fmt.unit(med.unitName, count: 2)) added", text: $quantityText)
                         .keyboardType(.decimalPad)
                         .focused($focused)
                         .font(.title2)
-                    DatePicker("Date picked up", selection: $date,
-                               in: Calendar.current.startOfDay(for: med.lastRefreshedDate)...Date(),
-                               displayedComponents: .date)
+                    CollapsingDatePicker(title: "Date picked up", selection: $date,
+                                         range: Calendar.current.startOfDay(for: med.lastRefreshedDate)...Date())
                 } header: {
                     Text("How many are being added?")
                 } footer: {
@@ -50,7 +49,7 @@ struct RefillSheet: View {
                 }
             }
             .onAppear {
-                quantity = med.lastRefillQuantity
+                quantityText = med.lastRefillQuantity.map(Fmt.plain) ?? ""
                 focused = true
             }
         }
@@ -58,6 +57,7 @@ struct RefillSheet: View {
     }
 
     private var onHand: Double { med.estimatedCount(on: date) }
+    private var quantity: Double? { Fmt.parse(quantityText) }
 
     private func save() {
         guard let qty = quantity, qty > 0 else { return }
@@ -73,14 +73,16 @@ struct RecountSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
-    @State private var count: Double?
+    @State private var countText = ""
     @FocusState private var focused: Bool
+
+    private var count: Double? { Fmt.parse(countText) }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Number of \(Fmt.unit(med.unitName, count: 2))", value: $count, format: .number)
+                    TextField("Number of \(Fmt.unit(med.unitName, count: 2))", text: $countText)
                         .keyboardType(.decimalPad)
                         .focused($focused)
                         .font(.title2)
