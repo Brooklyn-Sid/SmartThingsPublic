@@ -1,4 +1,6 @@
+import SwiftData
 import SwiftUI
+import UIKit
 import UserNotifications
 
 struct SettingsView: View {
@@ -11,6 +13,16 @@ struct SettingsView: View {
     @AppStorage(ReminderSettings.reminderMinuteKey) private var minute = ReminderSettings.defaultMinute
 
     @State private var notificationsAllowed: Bool?
+
+    @Query private var meds: [Medication]
+    @AppStorage(EmailReminders.enabledKey) private var emailEnabled = false
+    @AppStorage(EmailReminders.urlKey) private var scriptURL = ""
+    @AppStorage(EmailReminders.recipientsKey) private var recipients = ""
+    @AppStorage(EmailReminders.lastSyncKey) private var lastSync: Double = 0
+    @AppStorage(EmailReminders.lastErrorKey) private var lastError = ""
+    @State private var testing = false
+    @State private var testResult: String?
+    @State private var copied = false
 
     var body: some View {
         NavigationStack {
@@ -40,6 +52,8 @@ struct SettingsView: View {
                     }
                 }
 
+                emailSection
+
                 Section("Data sources") {
                     Text("Brand/generic names: NIH National Library of Medicine RxNorm. Images: NLM DailyMed (FDA labels). This app does not give medical advice.")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -53,6 +67,68 @@ struct SettingsView: View {
                 notificationsAllowed = [.authorized, .provisional].contains(settings.authorizationStatus)
             }
         }
+    }
+
+    private var emailSection: some View {
+        Section {
+            Toggle("Send email reminders", isOn: $emailEnabled)
+            if emailEnabled {
+                TextField("Email to (comma-separated)", text: $recipients, axis: .vertical)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Script URL (https://script.google.com/…/exec)", text: $scriptURL, axis: .vertical)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.footnote)
+                LabeledContent("Secret key") {
+                    HStack {
+                        Text(EmailReminders.secret).font(.footnote.monospaced()).textSelection(.enabled)
+                        Button(copied ? "Copied" : "Copy") {
+                            UIPasteboard.general.string = EmailReminders.secret
+                            copied = true
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                Button {
+                    Task { await sendTest() }
+                } label: {
+                    HStack {
+                        Text("Send test email")
+                        if testing { Spacer(); ProgressView() }
+                    }
+                }
+                .disabled(testing)
+                if let testResult {
+                    Text(testResult).font(.footnote)
+                } else if !lastError.isEmpty {
+                    Text("Last update failed: \(lastError)").font(.footnote).foregroundStyle(.red)
+                } else if lastSync > 0 {
+                    Text("Last sent to the script \(Date(timeIntervalSinceReferenceDate: lastSync).formatted(date: .abbreviated, time: .shortened)).")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Email reminders")
+        } footer: {
+            Text("Emails come from your Gmail through a Google Apps Script, on the same days as the phone reminders, even if the phone is off. Setup steps: MedSupply-iOS/email-reminders/README.md.")
+        }
+    }
+
+    @MainActor
+    private func sendTest() async {
+        testing = true
+        testResult = nil
+        do {
+            let message = try await EmailReminders.sendTest(meds)
+            testResult = "✓ \(message) Check the inbox (and spam folder)."
+            lastError = ""
+        } catch {
+            testResult = "✗ \(error.localizedDescription)"
+        }
+        testing = false
     }
 
     private var timeBinding: Binding<Date> {

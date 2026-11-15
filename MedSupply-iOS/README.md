@@ -7,6 +7,7 @@ A small SwiftUI app that tracks medication **supply** and reminds you to **reord
 - **Per medication:** brand and generic name, dose, frequency, pills per dose, current count, last date the count was refreshed, pharmacy (+ phone), Rx number, prescribing doctor (+ phone), controlled substance yes/no, refills remaining, Rx expiration date, notes, photo.
 - **Projected run-out date** = last refresh date + floor(count ÷ daily use). The current count is estimated the same way, so she doesn't need to update it every day.
 - **Reorder reminders** (local notifications) **7 days** before run-out, or **3 days** for controlled substances. Both values and the time of day can be changed in Settings. A follow-up fires the day before run-out if the medication hasn't been marked as reordered.
+- **Email reminders (optional):** a Google Apps Script in your account emails the same reminders from Gmail, even when the phone is off or the app has expired. See [`email-reminders/README.md`](email-reminders/README.md).
 - **Mark as reordered:** silences reminders until the refill is recorded. Available in the app and as a button on the notification itself.
 - **Refill button:** asks for the count added (pre-filled with the last refill amount) and the pickup date, adds that to the current estimated count, and sets that date as the last refresh date. It also decrements refills remaining if she tracks them.
 - **Recount:** enter the actual count to correct drift from missed or extra doses.

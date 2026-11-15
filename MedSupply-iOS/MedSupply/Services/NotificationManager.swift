@@ -32,6 +32,7 @@ enum NotificationManager {
         for med in meds { schedule(med) }
         let attention = meds.filter { !$0.isArchived && $0.status().needsAttention }.count
         Task { try? await center.setBadgeCount(attention) }
+        EmailReminders.push(meds)
     }
 
     private static func schedule(_ med: Medication) {
